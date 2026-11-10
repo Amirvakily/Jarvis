@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Jarvis</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <main class="main" aria-label="Conversation">
+    <header class="stage">
+      <div id="orb" data-state="offline" role="img" aria-label="Assistant state indicator">
+        <span class="ring r1"></span>
+        <span class="ring r2"></span>
+        <span class="ring r3"></span>
+        <span class="core"></span>
+      </div>
+      <p id="status" role="status" aria-live="polite">Connecting…</p>
+      <p id="hint" class="hint" hidden></p>
+      <div class="controls">
+        <button id="mic-btn" class="btn round" type="button" aria-pressed="false" aria-label="Start listening" title="Start listening (Space)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="mic" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/><path class="slash" d="M4 4l16 16"/></svg>
+          <span class="lbl">Mic</span>
+        </button>
+        <button id="stop-btn" class="btn round" type="button" aria-label="Stop the assistant" title="Stop (Esc)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          <span class="lbl">Stop</span>
+        </button>
+        <button id="speak-btn" class="btn round" type="button" aria-pressed="true" aria-label="Spoken replies on" title="Spoken replies">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+          <span class="lbl">Voice</span>
+        </button>
+      </div>
+    </header>
+
+    <section id="transcript" class="transcript" aria-label="Conversation transcript" aria-live="off" tabindex="0"></section>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <textarea id="text-input" rows="1" placeholder="Type a message — Enter to send, Shift+Enter for a new line" aria-label="Message"></textarea>
+      <button id="send-btn" class="btn primary" type="submit" aria-label="Send message">Send</button>
+    </form>
+  </main>
+
+  <aside class="side" aria-label="Assistant panel">
+    <section class="card">
+      <h2>Backend</h2>
+      <div class="row">
+        <select id="backend-select" aria-label="Language model backend"></select>
+        <span id="backend-tag" class="tag" hidden></span>
+      </div>
+    </section>
+
+    <section class="card grow">
+      <h2>Activity</h2>
+      <ul id="activity" class="activity" aria-label="Agent and skill activity"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Agents</h2>
+      <ul id="agents" class="plain"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Background tasks</h2>
+      <ul id="tasks" class="plain"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Memory</h2>
+      <div class="meter" aria-hidden="true"><span id="mem-bar"></span></div>
+      <p id="mem-text" class="muted small">—</p>
+      <ul id="mem-list" class="plain small"></ul>
+    </section>
+
+    <button id="reset-btn" class="btn wide" type="button">New conversation</button>
+  </aside>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
