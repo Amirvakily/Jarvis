@@ -1,0 +1,26 @@
+"""__NAME__: a custom Jarvis skill.
+
+Edit this file, then say "reload skills" (or run `jarvis skills reload`).
+Try it without a model:  jarvis skills test __NAME__ text="hello"
+"""
+
+from jarvis import SkillContext, skill
+from jarvis.skills.base import SkillError
+
+
+@skill(tags=["custom"])
+def __NAME__(text: str, ctx: SkillContext, repeat: int = 1) -> dict:
+    """Describe in one or two sentences what this skill does and when to use it.
+
+    The model reads this description to decide when to call the skill, so be
+    specific. Parameters are documented below and typed in the signature.
+
+    Args:
+        text: What this parameter means.
+        repeat: How many times to repeat the text.
+    """
+    if repeat < 1:
+        raise SkillError("repeat must be at least 1.")  # reported back to the model
+    # ctx.workspace is the sandboxed folder skills may read and write;
+    # ctx.resolve_path("notes.txt") refuses anything outside it.
+    return {"result": " ".join([text] * repeat)}

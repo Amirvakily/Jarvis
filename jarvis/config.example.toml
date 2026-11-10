@@ -1,0 +1,124 @@
+# Jarvis configuration. Every value here is optional: anything you leave out
+# falls back to the built-in default. Copy to ./jarvis.toml (or run
+# `jarvis init`) and edit. API keys are never stored in this file; they are
+# read from environment variables.
+
+[assistant]
+name = "Jarvis"
+user_name = ""                 # how the assistant should address you
+workspace = "./workspace"      # the only folder file/video skills may touch
+data_dir = "~/.jarvis"         # conversations, memory, downloaded voices
+
+# ---------------------------------------------------------------------------
+# Backends. One profile is active at a time. Switch whenever you like:
+#   by voice   "switch to the cloud" / "go local"
+#   in the app the Backend menu
+#   terminal   jarvis backend claude      (remembered across restarts)
+# ---------------------------------------------------------------------------
+[llm]
+active = "local"
+fallback = ""                  # e.g. "claude": used if the active backend is unreachable
+
+# Local, private, free. Needs Ollama (https://ollama.com) and:
+#   ollama pull llama3.1:8b
+[llm.profiles.local]
+provider = "ollama"
+model = "llama3.1:8b"
+base_url = "http://localhost:11434"
+num_ctx = 8192
+keep_alive = "10m"
+memory_mb = 5500               # used for the memory budget below
+
+# A GGUF file run in-process, no Ollama (pip install 'jarvis-assistant[llamacpp]').
+# [llm.profiles.gguf]
+# provider = "llamacpp"
+# model_path = "~/models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+# n_ctx = 8192
+# n_gpu_layers = -1
+# memory_mb = 5500
+
+# Claude. Set ANTHROPIC_API_KEY in your environment.
+[llm.profiles.claude]
+provider = "anthropic"
+model = "claude-opus-5-5"
+effort = "low"                 # low keeps conversation fast; medium/high think harder
+refusal_fallback = true
+
+# A lighter Claude profile, handy for pinning routine agents to (see agents/).
+# [llm.profiles.claude-fast]
+# provider = "anthropic"
+# model = "claude-haiku-5-5"
+# effort = "low"
+
+# OpenAI. Set OPENAI_API_KEY.
+[llm.profiles.openai]
+provider = "openai"
+model = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+# Any OpenAI-compatible endpoint: llama.cpp server, LM Studio, vLLM, a gateway...
+# [llm.profiles.custom]
+# provider = "openai"
+# model = "my-model"
+# base_url = "http://localhost:8080/v1"
+# api_key_env = ""             # name of an env var, if the endpoint needs a key
+# local = true                 # count it as a local backend
+
+# ---------------------------------------------------------------------------
+# Memory management for local components (LLM, speech models). Each loads the
+# first time a task needs it, the least recently used is evicted when the
+# budget would be exceeded, and anything idle is unloaded.
+# ---------------------------------------------------------------------------
+[resources]
+memory_budget_mb = 8000
+idle_unload_seconds = 600
+
+[voice]
+mode = "auto"                  # auto | native (PC mic + speakers) | browser | off
+language = "en"
+barge_in = true                # talk over the assistant to interrupt it
+wake_word = ""                 # e.g. "jarvis": ignore speech not addressed to it
+follow_up_seconds = 20         # after a reply, no wake word needed for this long
+
+[voice.stt]
+provider = "auto"              # auto | faster-whisper | openai | browser
+model = "base.en"              # tiny.en is faster, small.en more accurate
+device = "auto"                # auto | cpu | cuda
+compute_type = "int8"
+
+[voice.tts]
+provider = "auto"              # auto | piper | system | openai | browser
+model = ""                     # path to a Piper .onnx voice (blank: ~/.jarvis/voices)
+voice = "alloy"                # for provider = "openai"
+
+[server]
+host = "127.0.0.1"             # keep on loopback unless you set a token
+port = 8765
+token = ""                     # required for access from other devices
+
+[skills]
+plugin_dirs = ["./plugins"]    # drop .py files with @skill functions here
+disabled = []                  # skill names to switch off
+
+[agents]
+dirs = ["./agents"]            # .toml agent definitions
+
+[trading]
+data_source = "auto"           # auto | binance | yahoo | synthetic (testing only)
+watchlist = ["BTCUSDT", "ETHUSDT", "AAPL", "NVDA"]
+
+[publish]
+output_dir = "./workspace/published"
+webhook_url = ""
+wordpress_url = ""
+wordpress_user = ""
+wordpress_password_env = "WORDPRESS_APP_PASSWORD"
+
+[security]
+# Hosts you own or are authorised to assess. The scanner refuses all others.
+authorized_targets = []        # e.g. ["example.com", "*.staging.example.com"]
+
+[web]
+allow_private_hosts = false    # let web skills reach LAN/localhost addresses
+timeout_seconds = 20

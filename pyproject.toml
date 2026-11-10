@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-assistant"
+version = "0.1.0"
+description = "Voice-enabled, modular multi-agent AI assistant with a hybrid local/cloud backend"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "httpx2>=2.13",
+    "anthropic>=1.1",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.optional-dependencies]
+# Fully local speech: Whisper STT + Piper TTS + microphone/speaker access.
+voice = ["faster-whisper>=1.0", "piper-tts>=1.2", "sounddevice>=0.4", "numpy>=1.26"]
+# A native desktop window instead of a browser tab.
+desktop = ["pywebview>=5"]
+# Everything for the full PC experience.
+all = ["jarvis-assistant[voice,desktop,files]"]
+# Run GGUF models in-process instead of through Ollama.
+llamacpp = ["llama-cpp-python>=0.3"]
+# Extra file parsers for the read_file skill.
+files = ["pypdf>=4", "python-docx>=1.1"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5"]
+
+[project.scripts]
+jarvis = "jarvis.cli:main"
+
+[project.entry-points."jarvis.skills"]
+# Third-party packages can expose skill modules here, e.g.
+# my_pack = "my_package.skills"
+
+[tool.setuptools.packages.find]
+include = ["jarvis*"]
+
+[tool.setuptools.package-data]
+jarvis = ["server/static/*", "skills/templates/*", "config.example.toml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["slow: needs real speech models and network access"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]

@@ -1,0 +1,15 @@
+# Template for an experimental agent. Copy to <name>.toml and edit.
+# Pair it with your own skills in plugins/ to automate a custom workflow:
+# the agent supplies the judgement, the skills supply the capabilities.
+
+name = "my_agent"
+description = "One sentence the orchestrator uses to decide when to delegate here."
+
+instructions = """
+Describe the role, what good work looks like in this domain, and what the \
+final report should contain. Explain the reasons behind any constraints.
+"""
+
+skills = ["tag:custom"]
+# llm_profile = "local"
+# max_rounds = 8
