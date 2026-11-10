@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import importlib.util
 import inspect
 import json
 import logging
@@ -98,10 +97,13 @@ class SkillRegistry:
                 continue
             module_name = f"jarvis_plugin_{file.stem}"
             try:
-                spec = importlib.util.spec_from_file_location(module_name, file)
-                module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+                # Compiled straight from source: no bytecode cache, so an edit
+                # is always picked up by reload(), even within the same second.
+                module = ModuleType(module_name)
+                module.__file__ = str(file)
                 sys.modules[module_name] = module
-                spec.loader.exec_module(module)  # type: ignore[union-attr]
+                code = compile(file.read_text(encoding="utf-8"), str(file), "exec")
+                exec(code, module.__dict__)
                 self.register_module(module, f"plugin:{file.name}")
             except Exception as exc:
                 self.errors[str(file)] = repr(exc)
@@ -162,7 +164,7 @@ class SkillRegistry:
         except SkillError as exc:
             return str(exc), True
         except TimeoutError:
-            return f"Skill '{name}' timed out after {skill.timeout:.0f}s.", True
+            return f"Skill '{name}' timed out after {skill.timeout:g}s.", True
         except asyncio.CancelledError:
             raise
         except Exception as exc:

@@ -7,6 +7,7 @@
     jarvis serve           local server only (use from a browser or phone)
     jarvis agents ...      list agents / run several at once
     jarvis skills ...      list, scaffold, test and reload skills
+    jarvis security ...    authorise your own sites, run passive security audits
     jarvis backend [name]  show backends or switch the default one
     jarvis doctor          check that everything needed is installed
     jarvis setup-voice     download the local voice model
@@ -314,6 +315,80 @@ async def _skills(args: argparse.Namespace) -> int:
         await app.aclose()
 
 
+async def _security(args: argparse.Namespace) -> int:
+    from jarvis.skills import authorization as auth
+
+    config = _load(args)
+    action = args.action
+    if action == "targets":
+        mine, added = auth.config_targets(config), auth.added_targets(config)
+        entries = [(t, "jarvis.toml") for t in mine] + [
+            (t, "added with `jarvis security allow`") for t in added if t not in mine
+        ]
+        if not entries:
+            print("No authorised sites. Add one with: jarvis security allow example.com")
+        for target, origin in entries:
+            print(f"{target:36} {_style(origin, DIM)}")
+        return 0
+    if action in ("allow", "remove"):
+        if not args.hosts:
+            print(f"usage: jarvis security {action} HOST")
+            return 2
+        status = 0
+        for host in args.hosts:
+            try:
+                if action == "allow":
+                    print(f"Authorised {auth.add_target(config, host)}")
+                elif auth.remove_target(config, host):
+                    print(f"Removed {host.strip().lower()}")
+                else:
+                    print(f"{host} is not in the added list (entries from jarvis.toml must be edited there)")
+                    status = 1
+            except ValueError as exc:
+                print(exc)
+                status = 2
+        if action == "allow" and status == 0:
+            print("Only add sites you own or have written permission to test.")
+        return status
+    # scan: no language model involved
+    from jarvis.skills.base import SkillContext
+
+    app = _make(args)
+    try:
+        hosts = args.hosts or auth.concrete_hosts(auth.load_targets(config))
+        if not hosts:
+            print("No authorised sites. Add one with: jarvis security allow example.com")
+            return 2
+        ctx = SkillContext(app.config, agent="security", services=app.services())
+        status = 0
+        for host in hosts:
+            text, is_error = await app.skills.execute("security_audit", {"url": host}, ctx)
+            if is_error:
+                print(f"{_style(host, BOLD)}: {text}")
+                status = 1
+                continue
+            result = json.loads(text)
+            s = result["summary"]
+            print(f"{_style(host, BOLD)}  grade {result['grade']}  "
+                  f"high {s['high']}, medium {s['medium']}, low {s['low']}")
+            changes = result["changes"]
+            if changes:
+                print(f"    since last run (was {changes['previous_grade']}): "
+                      f"{len(changes['new'])} new, {len(changes['resolved'])} resolved")
+                for title in changes["new"]:
+                    print(f"      new: {title}")
+            else:
+                print("    first run for this site")
+            for failure in result["checks_failed"]:
+                print(f"    check failed: {failure['check']}: {failure['error']}")
+            print(f"    report: {app.config.workspace / result['report']}")
+            if s["high"] or result["checks_failed"]:
+                status = 1
+        return status
+    finally:
+        await app.aclose()
+
+
 def _new_skill(config: Config, name: str) -> int:
     if not name.isidentifier() or not name.islower():
         print("Skill names must be lowercase Python identifiers, e.g. weather_report")
@@ -490,6 +565,10 @@ def build_parser() -> argparse.ArgumentParser:
     skills.add_argument("name", nargs="?")
     skills.add_argument("args", nargs="*", metavar="key=value")
 
+    security = sub.add_parser("security", help="authorise your own sites and audit them")
+    security.add_argument("action", choices=["targets", "allow", "remove", "scan"])
+    security.add_argument("hosts", nargs="*", metavar="HOST")
+
     backend = sub.add_parser("backend", help="show backends or set the default")
     backend.add_argument("name", nargs="?")
 
@@ -513,7 +592,7 @@ def main(argv: list[str] | None = None) -> int:
     sync_commands = {"app": _app, "serve": _serve, "init": _init}
     async_commands = {
         "chat": _chat, "voice": _voice, "ask": _ask, "agents": _agents, "skills": _skills,
-        "backend": _backend, "doctor": _doctor, "setup-voice": _setup_voice,
+        "security": _security, "backend": _backend, "doctor": _doctor, "setup-voice": _setup_voice,
     }  # fmt: skip
     try:
         if command in sync_commands:

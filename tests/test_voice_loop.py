@@ -100,11 +100,6 @@ def test_abbreviations_are_not_split():
     ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="chunker.py: the abbreviation check is a plain str.endswith on the candidate "
-    "sentence, so ordinary words ending in 'st.', 'no.', 'ms.' ... are mistaken for abbreviations",
-)
 def test_words_ending_like_abbreviations_still_end_a_sentence():
     # 'fast.' ends with 'st.'; observed: ['Run it fast. Then stop it now.'] (one merged chunk)
     assert run_chunker(["Run it fast. Then stop it now. "]) == ["Run it fast.", "Then stop it now."]
@@ -582,9 +577,10 @@ async def test_barge_in_cancels_playback_and_interrupts_the_conversation(config,
     end = next(e for e in events if e["type"] == "turn_end")
     assert end["interrupted"] is True
     assert io.completed_plays == 0
-    assert not conversation.busy
+    # turn_end fires before interrupt() has finished correcting the history, so wait for it.
+    await wait_until(lambda: not conversation.busy)
     # The user never heard a complete sentence, so the half reply is dropped from history.
-    assert [m.role for m in app.session().messages] == ["user"]
+    await wait_until(lambda: [m.role for m in app.session().messages] == ["user"])
 
     # The barge-in speech is then handled as the next utterance.
     io.feed(*([SPEECH] * 12), *([SILENCE] * 30))
@@ -605,9 +601,10 @@ async def test_barge_in_records_what_was_actually_heard(config, run_voice):
     await wait_until(lambda: len(io.plays) >= 2)  # the second sentence is now playing
     io.feed(*([SPEECH] * 8))
     await wait_until(lambda: any(e["type"] == "turn_end" for e in events))
+    # History is rewritten to what was heard just after turn_end is emitted.
+    await wait_until(lambda: app.session().messages[-1].content == "Short one.")
     last = app.session().messages[-1]
     assert last.role == "assistant" and last.meta.get("interrupted")
-    assert last.content == "Short one."  # exactly the sentence that finished playing
 
 
 async def test_speech_during_playback_is_ignored_when_barge_in_is_off(config, run_voice):

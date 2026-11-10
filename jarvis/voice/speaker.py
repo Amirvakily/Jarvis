@@ -68,21 +68,30 @@ class SpeechQueue:
     async def _run(self) -> None:
         while True:
             text, synth = await self._queue.get()
-            self._current = asyncio.create_task(self._speak(text, synth))
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._current
-            self._current = None
-            self._set_pending(self._pending - 1)
+            current = self._current = asyncio.create_task(self._speak(text, synth))
+            try:
+                # wait() returns normally when the item is cancelled (barge-in)
+                # and raises only when this worker itself is being shut down.
+                await asyncio.wait([current])
+            except asyncio.CancelledError:
+                current.cancel()
+                raise
+            finally:
+                self._current = None
 
     async def _speak(self, text: str, synth: asyncio.Task) -> None:
         try:
             audio = await synth
+            if audio is not None and audio.pcm:
+                await self._play(audio, text)
+                self._heard.append(text)
         except asyncio.CancelledError:
             synth.cancel()
             raise
-        if audio is not None and audio.pcm:
-            await self._play(audio, text)
-            self._heard.append(text)
+        finally:
+            # Settled here so that `speaking` is already accurate when
+            # cancel() returns.
+            self._set_pending(self._pending - 1)
 
     def _set_pending(self, value: int) -> None:
         was_speaking = self._pending > 0

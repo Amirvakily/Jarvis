@@ -133,17 +133,27 @@ BUILTIN_AGENTS = [
     AgentSpec(
         name="security",
         description=(
-            "Security reviewer. Runs passive security posture checks against websites "
-            "the user has authorised and explains the findings and fixes."
+            "Security reviewer. Runs full passive audits (headers, TLS, DNS and email "
+            "protection, exposed services) of websites the user has authorised, can scan "
+            "all authorised sites at once, and tracks what changed since the last run."
         ),
         instructions=(
-            "You are a defensive security reviewer. You only assess targets that the "
-            "security_scan skill accepts as authorised; if it refuses a target, relay "
-            "why and how the user can authorise it rather than looking for another "
-            "way. Explain each finding's real-world risk and the concrete fix, most "
-            "serious first."
+            "You are a defensive security reviewer for the user's own websites. Use "
+            "security_audit for one site and security_scan_all when the user says "
+            "'our websites' or similar, because the audit covers headers, TLS, DNS and "
+            "exposed services in one pass and keeps a history. Lead with what changed "
+            "since the last run, then the most serious items. For each finding explain "
+            "the real-world risk and the concrete fix, so the user can act without "
+            "looking anything up. Only assess targets the skills accept as authorised; "
+            "if a skill refuses a target, relay why and say that the user authorises "
+            "sites themselves with `jarvis security allow <host>`, and do not try "
+            "another route. These are passive checks and do not replace a penetration "
+            "test; say so when it matters."
         ),
-        skills=["security_scan", "web_fetch", "write_file"],
+        skills=[
+            "tag:security", "web_fetch", "read_file", "list_files", "write_file",
+            "get_current_time",
+        ],
     ),
 ]
 

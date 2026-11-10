@@ -50,7 +50,8 @@ class SentenceChunker:
         for match in _BOUNDARY.finditer(self._buffer):
             end = match.end(1) if match.group(1) else match.start(3)
             candidate = self._buffer[position:end]
-            if match.group(1) and candidate.strip().lower().endswith(_ABBREVIATIONS):
+            words = candidate.split()
+            if match.group(1) and words and words[-1].lower().lstrip("(\"'") in _ABBREVIATIONS:
                 continue
             minimum = FIRST_MIN_CHARS if self._emitted == 0 and not sentences else MIN_CHARS
             if len(candidate.strip()) < minimum:

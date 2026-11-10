@@ -118,6 +118,8 @@ wordpress_password_env = "WORDPRESS_APP_PASSWORD"
 [security]
 # Hosts you own or are authorised to assess. The scanner refuses all others.
 authorized_targets = []        # e.g. ["example.com", "*.staging.example.com"]
+# You can also add sites from the command line: `jarvis security allow example.com`
+doh_url = "https://cloudflare-dns.com/dns-query"   # resolver for the DNS/email check; it sees the domain names
 
 [web]
 allow_private_hosts = false    # let web skills reach LAN/localhost addresses

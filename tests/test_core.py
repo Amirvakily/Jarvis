@@ -522,21 +522,19 @@ def test_file_agents_cannot_list_delegate(tmp_path):
     assert load_agent_file(path).skills == ["read_file"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="load_agent_file only strips the literal names 'delegate'/'start_background_task'/'*'; "
-    "a file agent listing 'tag:core' still receives them",
-)
-def test_file_agents_cannot_reach_delegate_through_tags(tmp_path):
+def test_file_agents_cannot_reach_delegate_through_tags(tmp_path, config):
     path = tmp_path / "tagged.toml"
     path.write_text(
         'name = "tagged"\ndescription = "d"\ninstructions = "i"\nskills = ["tag:core"]\n',
         encoding="utf-8",
     )
     agent = load_agent_file(path)
-    names = {s.name for s in SkillRegistry().load_all().select(agent.skills)}
-    assert "delegate" not in names
-    assert "start_background_task" not in names
+    app = Jarvis(config)
+    names = {tool.name for tool in app.engine._tools_for(agent)}
+    assert "get_current_time" in names  # the tag still expands...
+    assert not names & {"delegate", "start_background_task", "cancel_background_task"}
+    # ...while the orchestrator keeps its orchestration skills.
+    assert "delegate" in {tool.name for tool in app.engine._tools_for(app.agents.core)}
 
 
 # --------------------------------------------------------------------------- engine
@@ -736,7 +734,7 @@ async def test_specialist_cannot_delegate_further(config):
     assert reply == "finished"
     nested_attempt = provider.calls[2]["messages"][-1]
     assert nested_attempt.tool_call_id == "e1" and nested_attempt.is_error
-    assert "cannot delegate further" in nested_attempt.content
+    assert "not one of your skills" in nested_attempt.content
     assert len(provider.calls) == 4  # the nested specialist never ran
 
 

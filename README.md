@@ -92,6 +92,8 @@ Use `jarvis chat` to type these, or speak them.
 | `jarvis agents list` | List agents with their skills and pinned backend. |
 | `jarvis agents run AGENT "TASK" [AGENT "TASK" ...]` | Run one or several agents concurrently. |
 | `jarvis skills list` / `new NAME` / `test NAME key=value ...` / `reload` | List, scaffold, run and reload skills. |
+| `jarvis security targets` / `allow HOST` / `remove HOST` | List, add or remove the sites the security checks may assess. Only you can do this; the assistant cannot. |
+| `jarvis security scan [HOST ...]` | Audit the given sites (or all authorised ones) with no language model; exit code 1 on any high finding or failed check, so it works from cron or Task Scheduler. |
 | `jarvis backend [NAME]` | Show backends and their health, or set the default (remembered across restarts). |
 | `jarvis doctor` | Check the installation. |
 | `jarvis setup-voice` | Download the local Piper voice (`--voice` picks another; default `en_US-lessac-medium`). |
@@ -165,7 +167,7 @@ An agent is a role: instructions, the skills it may use, and optionally a pinned
 | `content` | Writer and publisher: researches, drafts, formats and publishes articles. | `tag:content`, `web_search`, `web_fetch`, `read_file`, `get_current_time` |
 | `video` | Media technician: inspect, clip, join, transcode, extract audio and thumbnails with ffmpeg. | `tag:video`, `list_files` |
 | `research` | Searches the web, reads pages and local documents, writes up findings with sources. | `tag:web`, `tag:files`, `get_current_time` |
-| `security` | Passive security posture checks on sites you have authorised. | `security_scan`, `web_fetch`, `write_file` |
+| `security` | Full passive audits (headers, TLS, DNS/email, exposed services) of sites you have authorised, one or all, with change tracking. | `tag:security`, `web_fetch`, `read_file`, `list_files`, `write_file`, `get_current_time` |
 | `summarizer` | Condenses long documents and pages (defined in `agents/summarizer.toml`). | `read_file`, `web_fetch`, `list_files` |
 
 **How delegation works.**
@@ -199,6 +201,24 @@ skills = ["read_file", "web_fetch", "list_files"]
 `name` must be lowercase letters, digits and underscores, and `description` and `instructions` are required. Agents defined in files cannot hold the `delegate`, `start_background_task` or `*` entries; those are stripped. An optional `max_rounds` limits tool rounds. Say "reload skills" or run `jarvis skills reload` to pick up edits; `jarvis agents list` reports files that failed to load. `agents/experimental_template.toml.example` is a starting point for an experimental agent: copy it to `<name>.toml`, edit it and pair it with your own skills in `plugins/`.
 
 The project ships no deepfake or impersonation generator. Media-synthesis experiments are left to skills you write yourself, and should only use your own likeness or that of people who have consented.
+
+### Checking your own websites
+
+Authorise a site first. Only you can do this, from the command line:
+
+```
+jarvis security allow example.com
+```
+
+Then say things like:
+
+- "Check our websites."
+- "Run a full security audit of example.com."
+- "Check our sites every morning and tell me what changed." (recurring background task)
+
+Reports go to `workspace/security/<host>/`: `latest.json` (used to detect changes) and a readable `YYYY-MM-DD.md`.
+
+What is checked: HTTPS and redirects, security headers, cookies, mixed content, a few commonly exposed files (`.git`, `.env`, `server-status`), the TLS certificate and old protocol versions, SPF, DMARC, CAA and DNSSEC, and whether 14 well-known risky service ports (databases, caches, RDP, Telnet and similar) accept a connection. What is not: anything that exploits, fuzzes, guesses passwords or scans other ports. These are passive checks and do not replace a penetration test. The DNS check sends the domain name to the DNS-over-HTTPS resolver in `security.doh_url` (Cloudflare by default).
 
 ## Skills
 
@@ -234,7 +254,12 @@ Built-in skills, grouped by tag (`jarvis skills list` prints the live inventory)
 | video | `video_transcode` | Re-encode into another format, optionally scaled to a new height. |
 | video | `video_extract_audio` | Save a video's audio track as its own file. |
 | video | `video_thumbnail` | Save one frame as a JPEG. |
-| security | `security_scan` | Passive security check of a website you own or may assess. |
+| security | `security_scan` | Passive check of one site's HTTPS, headers, cookies and exposed files. |
+| security | `dns_security_check` | SPF, DMARC, MX, CAA and DNSSEC for a domain, via DNS-over-HTTPS. |
+| security | `tls_check` | Certificate issuer, names and expiry, protocol and cipher, and whether TLS 1.0/1.1 is still accepted. |
+| security | `exposed_services_check` | TCP connect to a fixed list of 14 risky service ports (databases, RDP, Telnet, ...). |
+| security | `security_audit` | All of the above for one site; saves a report and lists what changed since last time. |
+| security | `security_scan_all` | `security_audit` for every authorised site (up to 10). |
 | custom, fun | `roll_dice` | The example plugin in `plugins/example_dice.py`. |
 
 The video skills need `ffmpeg` and `ffprobe` on your PATH (for example `winget install ffmpeg` on Windows). `read_file` handles PDF and Word documents when the `files` extra is installed.
@@ -299,7 +324,7 @@ my_pack = "my_package.skills"
 - The server binds to `127.0.0.1` by default. Requests carrying a cross-origin `Origin` header are refused, for both HTTP and the WebSocket. If you bind to a non-loopback address a token is required: set `server.token`, or one is generated and logged at startup. Pass it as `?token=...` or as a bearer token.
 - File skills and video skills only touch `assistant.workspace` (default `./workspace`). Paths outside it are refused.
 - Web skills refuse hosts that resolve to private, loopback or link-local addresses unless `web.allow_private_hosts = true`. Timeout is `web.timeout_seconds`.
-- `security_scan` is passive and only runs against hosts in `security.authorized_targets` (exact names or `*.example.com` patterns; loopback is always allowed). Other targets are refused.
+- The security skills are passive and only run against hosts you authorised: `security.authorized_targets` plus whatever you added with `jarvis security allow` (exact names, IPs or `*.example.com` patterns; loopback is always allowed). Other targets are refused before any request is made. No skill can add targets, so the model cannot widen its own scope. Port checks use a fixed list and send nothing after connecting.
 - The trading agent analyses and never places orders. If market data comes from the `synthetic` source (`trading.data_source = "synthetic"`, for testing), results are labelled "synthetic (not real market data)".
 - API keys come from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WORDPRESS_APP_PASSWORD`, or whatever `api_key_env` names), never from the config file.
 
@@ -320,7 +345,7 @@ Run `jarvis init` to copy the annotated starter config to `./jarvis.toml`, or re
 | `[agents]` | `dirs`. |
 | `[trading]` | `data_source` (`auto`, `binance`, `yahoo`, `synthetic`), `watchlist`. |
 | `[publish]` | `output_dir`, `webhook_url`, `wordpress_url`, `wordpress_user`, `wordpress_password_env`. |
-| `[security]` | `authorized_targets`. |
+| `[security]` | `authorized_targets`, `doh_url`. |
 | `[web]` | `allow_private_hosts`, `timeout_seconds`. |
 
 ## Architecture

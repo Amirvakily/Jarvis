@@ -267,6 +267,7 @@ class NativeVoice:
             if speaking:
                 heard = await self.speech.cancel()
                 await self.conversation.interrupt(heard)
+                await self.speech.cancel()  # a sentence may have slipped in meanwhile
             self._set_state("listening")
         elif result == "cancel":
             self._set_state(self._resting_state())

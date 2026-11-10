@@ -16,7 +16,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from jarvis.agents.base import AgentSpec
+from jarvis.agents.base import CORE, AgentSpec
 from jarvis.config import Config
 from jarvis.core.session import Session
 from jarvis.core.types import LLMError, LLMResponse, Message, TextDelta, ToolCall, ToolSpec
@@ -27,7 +27,11 @@ from jarvis.skills.registry import SkillRegistry
 log = logging.getLogger(__name__)
 
 Emit = Callable[[dict], Awaitable[None]]
+CORE_AGENT = CORE.name
 INTERRUPTED = "Interrupted by the user before this finished."
+#: Skills that start other agents. Only the orchestrator may hold them, however
+#: an agent's skill list is written (a tag or wildcard could otherwise pull them in).
+ORCHESTRATOR_ONLY = frozenset({"delegate", "start_background_task", "cancel_background_task"})
 
 
 async def _noop(_: dict) -> None:
@@ -66,7 +70,7 @@ class Engine:
             for round_index in range(max_rounds + 1):
                 # The last round offers no tools, forcing a spoken wrap-up
                 # instead of an endless tool loop.
-                tools = self.skills.specs(agent.skills) if round_index < max_rounds else []
+                tools = self._tools_for(agent) if round_index < max_rounds else []
                 profile = self._profile_for(agent)
                 prompt = system(profile) if callable(system) else system
                 response = await self._model_step(session, profile, prompt, tools, emit, agent.name)
@@ -74,12 +78,18 @@ class Engine:
                 calls = response.message.tool_calls
                 if not calls or response.stop_reason != "tool_use":
                     break
-                await self._run_tools(session, calls, ctx, emit)
+                await self._run_tools(session, calls, ctx, emit, {t.name for t in tools})
         except LLMError:
             # Leave no half-finished turn behind; the caller reports the error.
             del session.messages[checkpoint:]
             raise
         return final_text
+
+    def _tools_for(self, agent: AgentSpec) -> list[ToolSpec]:
+        specs = self.skills.specs(agent.skills)
+        if agent.name != CORE_AGENT:
+            specs = [spec for spec in specs if spec.name not in ORCHESTRATOR_ONLY]
+        return specs
 
     def _profile_for(self, agent: AgentSpec) -> str:
         if agent.llm_profile and agent.llm_profile in self.router.profiles:
@@ -141,7 +151,12 @@ class Engine:
         return response
 
     async def _run_tools(
-        self, session: Session, calls: list[ToolCall], ctx: SkillContext, emit: Emit
+        self,
+        session: Session,
+        calls: list[ToolCall],
+        ctx: SkillContext,
+        emit: Emit,
+        allowed: set[str],
     ) -> None:
         async def run_one(call: ToolCall) -> Message:
             await emit(
@@ -153,7 +168,11 @@ class Engine:
                     "agent": ctx.agent,
                 }
             )
-            text, is_error = await self.skills.execute(call.name, call.arguments, ctx)
+            if call.name in allowed:
+                text, is_error = await self.skills.execute(call.name, call.arguments, ctx)
+            else:
+                # A model may only run what it was offered, whatever name it asks for.
+                text, is_error = f"'{call.name}' is not one of your skills.", True
             await emit(
                 {
                     "type": "tool_end",

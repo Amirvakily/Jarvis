@@ -116,6 +116,8 @@ DEFAULTS: dict[str, Any] = {
         # Hosts you own or are authorised to assess. The scanner refuses
         # everything else (loopback is always allowed).
         "authorized_targets": [],
+        # DNS-over-HTTPS resolver for the DNS/email check (it sees the domain names).
+        "doh_url": "https://cloudflare-dns.com/dns-query",
     },
     "web": {"allow_private_hosts": False, "timeout_seconds": 20},
 }
