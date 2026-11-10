@@ -187,3 +187,7 @@ ul.plain li .desc { color: var(--muted); font-size: 12px; display: block; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   #orb .core { transform: none; }
 }
+
+/* keep long lists compact so Activity stays visible */
+#agents, #tasks { max-height: 150px; overflow-y: auto; }
+#mem-list { max-height: 90px; overflow-y: auto; }
